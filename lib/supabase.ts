@@ -10,10 +10,12 @@ import {
   SlotStatus,
   GateStatus,
   AreaStatus,
+  AreaDataSource,
 } from './types';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 
 // Periksa apakah kredensial Supabase telah diisi oleh user
 export const isSupabaseConfigured = Boolean(
@@ -43,6 +45,7 @@ export function mapDbRowsToParkingAreas(
         id: s.id,
         slotNumber: s.slot_number,
         status: s.status as SlotStatus,
+        distance_cm: s.distance_cm ?? undefined,
         lastChanged: s.last_changed || new Date().toISOString(),
       }));
 
@@ -70,6 +73,7 @@ export function mapDbRowsToParkingAreas(
       ? {
           id: deviceRow.id,
           model: deviceRow.model || 'ESP32 Controller',
+          deviceName: deviceRow.device_name || deviceRow.id,
           status: deviceRow.status || 'ONLINE',
           ipAddress: deviceRow.ip_address || '',
           macAddress: deviceRow.mac_address || '',
@@ -77,12 +81,13 @@ export function mapDbRowsToParkingAreas(
           firmwareVersion: deviceRow.firmware_version || 'v2.4.2',
           uptimeSeconds: deviceRow.uptime_seconds || 0,
           lastHeartbeat: deviceRow.last_heartbeat || new Date().toISOString(),
-          mqttTopic: deviceRow.mqtt_topic || `smartcampus/parking/${areaRow.id}/telemetry`,
+          mqttTopic: deviceRow.mqtt_topic || `campus/parking/${areaRow.id}/node/status`,
           sensorCount: deviceRow.sensor_count || areaSlots.length,
         }
       : {
           id: `ESP32-${areaRow.id.toUpperCase()}`,
           model: 'ESP32 Gateway Node',
+          deviceName: `ESP32-${areaRow.id.toUpperCase()}`,
           status: 'ONLINE',
           ipAddress: '192.168.1.100',
           macAddress: '24:6F:28:B4:9C:12',
@@ -90,15 +95,20 @@ export function mapDbRowsToParkingAreas(
           firmwareVersion: 'v2.4.2',
           uptimeSeconds: 86420,
           lastHeartbeat: new Date().toISOString(),
-          mqttTopic: `smartcampus/parking/${areaRow.id}/telemetry`,
+          mqttTopic: `campus/parking/${areaRow.id}/node/status`,
           sensorCount: areaSlots.length,
         };
+
+    // Label: FILKOM adalah hardware fisik (REAL), fakultas lain SIMULATED
+    const dataSource: AreaDataSource = (areaRow.data_source as AreaDataSource) || (areaRow.id === 'filkom-main' ? 'REAL' : 'SIMULATED');
 
     return {
       id: areaRow.id,
       facultyName: areaRow.faculty_name,
+      name: areaRow.name || areaRow.faculty_name,
       description: areaRow.description || '',
       status: (areaRow.status as AreaStatus) || 'AVAILABLE',
+      dataSource,
       lastUpdated: areaRow.last_updated || new Date().toISOString(),
       mapLocation: {
         x: Number(areaRow.map_x) || 28,
@@ -113,7 +123,7 @@ export function mapDbRowsToParkingAreas(
 }
 
 // -----------------------------------------------------------------------------
-// OPERASI DATABASE SUPABASE (DIGUNAKAN OLEH CONTEXT & ADMIN DASHBOARD)
+// OPERASI DATABASE SUPABASE & BACKEND API
 // -----------------------------------------------------------------------------
 
 // 1. Ambil seluruh data parkir terpadu dari Supabase
@@ -152,6 +162,9 @@ export async function fetchParkingDataFromSupabase(): Promise<{
       slotId: a.slot_id,
       activity: a.activity,
       status: a.status,
+      previous_status: a.previous_status,
+      current_status: a.current_status,
+      data_source: a.data_source,
       durationMinutes: a.duration_minutes,
     }));
 
@@ -161,11 +174,10 @@ export async function fetchParkingDataFromSupabase(): Promise<{
       title: n.title,
       message: n.message,
       type: n.type,
-      read: n.is_read ?? false,
+      read: n.is_read ?? n.read ?? false,
       areaId: n.area_id,
     }));
 
-    // Hitung ringkasan pemakaian jam hari ini dari data area
     const totalSlots = areas.reduce((acc, a) => acc + a.slots.length, 0);
     const occupiedSlots = areas.reduce(
       (acc, a) => acc + a.slots.filter((s) => s.status === 'OCCUPIED').length,
@@ -188,7 +200,35 @@ export async function fetchParkingDataFromSupabase(): Promise<{
   }
 }
 
-// 2. Ubah status slot parkir (Admin Dashboard)
+// 2. Kirim perintah gerbang ke Backend (Two-Way Communication via MQTT)
+export async function sendGateCommandToBackend(
+  areaId: string,
+  command: GateStatus,
+  gateId?: string
+): Promise<{ success: boolean; message: string; pendingConfirmation?: boolean }> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/gates/${areaId}/command`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ command, gateId, requestedBy: 'admin-dashboard' }),
+    });
+
+    if (res.ok) {
+      return await res.json();
+    }
+  } catch (err) {
+    console.warn('[Backend API] Backend not reachable for gate command, falling back to direct Supabase:', err);
+  }
+
+  // Fallback direct Supabase jika backend sedang offline
+  const success = await toggleGateStatusInSupabase(areaId, command);
+  return {
+    success,
+    message: success ? `Status portal gerbang disimpan langsung ke Supabase.` : 'Gagal mengirim perintah portal.',
+  };
+}
+
+// 3. Ubah status slot parkir (Admin Dashboard)
 export async function updateSlotStatusInSupabase(
   slotId: string,
   newStatus: SlotStatus
@@ -210,7 +250,7 @@ export async function updateSlotStatusInSupabase(
   return true;
 }
 
-// 3. Buka/Tutup Portal Barrier Gerbang (Admin Dashboard)
+// 4. Buka/Tutup Portal Barrier Gerbang (Direct Supabase)
 export async function toggleGateStatusInSupabase(
   areaId: string,
   newStatus: GateStatus
@@ -233,40 +273,53 @@ export async function toggleGateStatusInSupabase(
   return true;
 }
 
-// 4. Update Catatan Portal Gerbang (Admin Dashboard)
+// 5. Update Catatan Portal Gerbang
 export async function updateGateNotesInSupabase(
   areaId: string,
   notes: string
 ): Promise<boolean> {
-  if (!isSupabaseConfigured) return false;
+  // Coba update via Backend terlebih dahulu
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/gates/${areaId}/notes`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ notes }),
+    });
+    if (res.ok) return true;
+  } catch (e) {
+    // fallback to supabase
+  }
 
+  if (!isSupabaseConfigured) return false;
   const { error } = await supabase
     .from('gates')
     .update({ notes })
     .eq('area_id', areaId);
 
-  if (error) {
-    console.error('Gagal update catatan portal di Supabase:', error);
-    return false;
-  }
-  return true;
+  return !error;
 }
 
-// 5. Update Catatan Area Parkir (Admin Dashboard)
+// 6. Update Catatan Area Parkir
 export async function updateAreaNotesInSupabase(
   areaId: string,
   notes: string
 ): Promise<boolean> {
-  if (!isSupabaseConfigured) return false;
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/areas/${areaId}/notes`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ notes }),
+    });
+    if (res.ok) return true;
+  } catch (e) {
+    // fallback to supabase
+  }
 
+  if (!isSupabaseConfigured) return false;
   const { error } = await supabase
     .from('parking_areas')
     .update({ notes, last_updated: new Date().toISOString() })
     .eq('id', areaId);
 
-  if (error) {
-    console.error('Gagal update catatan area di Supabase:', error);
-    return false;
-  }
-  return true;
+  return !error;
 }

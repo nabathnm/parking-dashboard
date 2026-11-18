@@ -9,6 +9,8 @@ import { Esp32DeviceCard } from '@/components/areas/Esp32DeviceCard';
 import { ParkingStatusBadge } from '@/components/common/ParkingStatusBadge';
 import { ParkingHistoryTable } from '@/components/history/ParkingHistoryTable';
 import { CampusParkingMap } from '@/components/map/CampusParkingMap';
+import { ConnectionStatusBar } from '@/components/common/ConnectionStatusBar';
+import { DataSourceBadge } from '@/components/common/DataSourceBadge';
 import {
   ShieldCheck,
   Cpu,
@@ -32,16 +34,9 @@ function AdminContent() {
   const {
     areas,
     stats,
-    simulationActive,
-    setSimulationActive,
-    simulationIntervalMs,
-    setSimulationIntervalMs,
-    triggerRandomEvent,
-    resetAllData,
     toggleSlot,
     toggleGate,
     updateGateNotes,
-    lastSimEventMessage,
   } = useParking();
 
   // Active selected area for inspection & modification (4 areas total)
@@ -67,6 +62,9 @@ function AdminContent() {
 
   return (
     <div className="space-y-6">
+      {/* Realtime IoT & Database Connection Status Bar */}
+      <ConnectionStatusBar />
+
       {/* Admin Top Header Banner (Consistent Blue Palette) */}
       <div className="bg-linear-to-r from-blue-900 via-indigo-900 to-slate-900 rounded-2xl border border-blue-800 p-5 sm:p-6 text-white shadow-md space-y-4">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
@@ -86,51 +84,6 @@ function AdminContent() {
             <p className="text-xs text-blue-200 max-w-2xl">
               Kendalikan status 2 sensor fisik FILKOM & slot simulasi fakultas lain, operasikan gerbang barrier gate, jalankan simulasi pergerakan kendaraan, dan pantau ESP32.
             </p>
-          </div>
-
-          {/* Quick Simulation Loop Controls */}
-          <div className="flex flex-wrap items-center gap-2 bg-blue-950/60 p-2 rounded-xl border border-blue-800/80">
-            <button
-              type="button"
-              onClick={() => setSimulationActive(!simulationActive)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all shadow-xs cursor-pointer ${
-                simulationActive
-                  ? 'bg-blue-500 hover:bg-blue-400 text-white'
-                  : 'bg-emerald-600 hover:bg-emerald-700 text-white'
-              }`}
-              title={simulationActive ? 'Jeda loop simulasi otomatis' : 'Aktifkan loop simulasi otomatis'}
-            >
-              {simulationActive ? (
-                <>
-                  <Pause className="w-3.5 h-3.5" />
-                  <span>Jeda Simulasi</span>
-                </>
-              ) : (
-                <>
-                  <Play className="w-3.5 h-3.5" />
-                  <span>Mulai Simulasi</span>
-                </>
-              )}
-            </button>
-
-            <button
-              type="button"
-              onClick={triggerRandomEvent}
-              className="px-3 py-1.5 rounded-lg bg-blue-800 hover:bg-blue-700 text-white text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
-              title="Picu satu event kendaraan acak"
-            >
-              <Shuffle className="w-3.5 h-3.5 text-blue-300" />
-              <span>Picu Event</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={resetAllData}
-              className="p-1.5 rounded-lg text-blue-300 hover:text-white hover:bg-blue-800 transition-colors cursor-pointer"
-              title="Reset seluruh data ke kondisi awal"
-            >
-              <RotateCcw className="w-4 h-4" />
-            </button>
           </div>
         </div>
 
@@ -231,6 +184,10 @@ function AdminContent() {
                   <h2 className="text-base font-bold text-slate-900">
                     {selectedArea.facultyName}
                   </h2>
+                  <DataSourceBadge
+                    source={selectedArea.dataSource === 'REAL' ? 'REAL DEVICE' : 'SIMULATED'}
+                    size="sm"
+                  />
                   <ParkingStatusBadge status={selectedArea.status} size="sm" />
                 </div>
                 <p className="text-xs text-blue-700 font-medium mt-0.5">

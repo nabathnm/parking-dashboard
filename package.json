@@ -4,6 +4,9 @@
   "private": true,
   "scripts": {
     "dev": "next dev --webpack",
+    "server": "npm --prefix server run dev",
+    "test:emqx": "node server/node_modules/tsx/dist/cli.mjs server/scripts/test_emqx.ts",
+    "simulate:esp32": "node server/node_modules/tsx/dist/cli.mjs server/scripts/simulate_esp32.ts",
     "build": "next build --webpack",
     "start": "next start",
     "lint": "eslint"
@@ -16,6 +19,7 @@
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "recharts": "^3.10.1",
+    "socket.io-client": "^4.8.4",
     "tailwind-merge": "^3.7.0"
   },
   "devDependencies": {

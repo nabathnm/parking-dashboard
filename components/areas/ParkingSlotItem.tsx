@@ -73,6 +73,9 @@ export function ParkingSlotItem({
           </span>
           <span className="text-[10px] font-medium text-slate-500">
             Sensor {slot.slotNumber}
+            {slot.distance_cm !== undefined && (
+              <span className="ml-1 text-[9px] text-blue-600 font-mono">({slot.distance_cm}cm)</span>
+            )}
           </span>
         </div>
 

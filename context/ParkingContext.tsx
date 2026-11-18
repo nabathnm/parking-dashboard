@@ -7,7 +7,9 @@ import React, {
   useEffect,
   useCallback,
   useMemo,
+  useRef,
 } from 'react';
+import { io, Socket } from 'socket.io-client';
 import {
   ParkingArea,
   ParkingSlot,
@@ -17,26 +19,29 @@ import {
   AreaStatus,
   SlotStatus,
   GateStatus,
+  ConnectionState,
 } from '@/lib/types';
 import {
   supabase,
   isSupabaseConfigured,
   fetchParkingDataFromSupabase,
   updateSlotStatusInSupabase,
-  toggleGateStatusInSupabase,
   updateGateNotesInSupabase,
   updateAreaNotesInSupabase,
+  sendGateCommandToBackend,
+  API_BASE_URL,
 } from '@/lib/supabase';
 
-// Initial baseline data jika Supabase sedang loading atau koneksi awal
-const BASELINE_AREAS: ParkingArea[] = [
+// Baseline data initial dengan label REAL DEVICE (FILKOM) dan SIMULATED (Fakultas lain)
+const INITIAL_AREAS: ParkingArea[] = [
   {
     id: 'filkom-main',
     facultyName: 'Fakultas Ilmu Komputer',
     description: 'Area uji coba hardware asli dengan 2 sensor jarak HC-SR04 terhubung ke modul ESP32 dan 1 portal servo gate.',
     status: 'AVAILABLE',
+    dataSource: 'REAL',
     lastUpdated: new Date().toISOString(),
-    notes: 'Kawasan testbed IoT terhubung langsung ke modul ESP32 live (2 sensor fisik asli).',
+    notes: 'Kawasan testbed IoT terhubung langsung ke modul ESP32 live via EMQX Cloud.',
     mapLocation: { x: 28, y: 28 },
     slots: [
       { id: 'slot-a1', slotNumber: 'A1', status: 'OCCUPIED', lastChanged: new Date().toISOString() },
@@ -49,18 +54,20 @@ const BASELINE_AREAS: ParkingArea[] = [
       lastToggled: new Date().toISOString(),
       servoAngle: 0,
       notes: 'Portal gerbang utama gedung FILKOM (Otomatis ESP32)',
+      isPendingConfirmation: false,
     },
     device: {
-      id: 'ESP32-FILKOM-NODE-01',
-      model: 'ESP32-WROOM-32D (Dual-Core 240MHz)',
+      id: 'ESP32-FILKOM-01',
+      model: 'ESP32-WROOM-32D',
+      deviceName: 'ESP32-FILKOM-01',
       status: 'ONLINE',
       ipAddress: '192.168.1.108',
       macAddress: '24:6F:28:B4:9C:12',
       rssi: -58,
-      firmwareVersion: 'v2.4.2-iot-mesh',
+      firmwareVersion: 'v2.4.2-iot',
       uptimeSeconds: 86420,
       lastHeartbeat: new Date().toISOString(),
-      mqttTopic: 'smartcampus/parking/filkom/telemetry',
+      mqttTopic: 'campus/parking/filkom/node/status',
       sensorCount: 2,
     },
   },
@@ -69,6 +76,7 @@ const BASELINE_AREAS: ParkingArea[] = [
     facultyName: 'Fakultas Teknik',
     description: 'Area parkir terpadu Fakultas Teknik untuk dosen, mahasiswa, dan laboratorium.',
     status: 'LIMITED',
+    dataSource: 'SIMULATED',
     lastUpdated: new Date().toISOString(),
     notes: 'Akses cepat ke Gedung Dekanat & Laboratorium Rekayasa Terpadu.',
     mapLocation: { x: 72, y: 28 },
@@ -89,6 +97,7 @@ const BASELINE_AREAS: ParkingArea[] = [
     device: {
       id: 'SIM-NODE-TEKNIK-02',
       model: 'Simulated Gateway Controller',
+      deviceName: 'SIM-NODE-TEKNIK-02',
       status: 'ONLINE',
       ipAddress: '192.168.2.45',
       macAddress: '30:AE:A4:07:9F:88',
@@ -96,7 +105,7 @@ const BASELINE_AREAS: ParkingArea[] = [
       firmwareVersion: 'v1.8.0-sim',
       uptimeSeconds: 142000,
       lastHeartbeat: new Date().toISOString(),
-      mqttTopic: 'smartcampus/parking/teknik/telemetry',
+      mqttTopic: 'campus/parking/teknik/node/status',
       sensorCount: 10,
     },
   },
@@ -105,6 +114,7 @@ const BASELINE_AREAS: ParkingArea[] = [
     facultyName: 'Fakultas Ekonomi dan Bisnis',
     description: 'Area parkir sentral FEB dengan kapasitas padat dan pemantauan sensor otomatis.',
     status: 'LIMITED',
+    dataSource: 'SIMULATED',
     lastUpdated: new Date().toISOString(),
     notes: 'Kawasan parkir rindang sayap barat kampus FEB.',
     mapLocation: { x: 72, y: 72 },
@@ -125,6 +135,7 @@ const BASELINE_AREAS: ParkingArea[] = [
     device: {
       id: 'SIM-NODE-FEB-03',
       model: 'Simulated Gateway Controller',
+      deviceName: 'SIM-NODE-FEB-03',
       status: 'ONLINE',
       ipAddress: '192.168.3.12',
       macAddress: '48:3F:DA:11:44:CD',
@@ -132,7 +143,7 @@ const BASELINE_AREAS: ParkingArea[] = [
       firmwareVersion: 'v1.8.0-sim',
       uptimeSeconds: 98000,
       lastHeartbeat: new Date().toISOString(),
-      mqttTopic: 'smartcampus/parking/feb/telemetry',
+      mqttTopic: 'campus/parking/feb/node/status',
       sensorCount: 10,
     },
   },
@@ -141,6 +152,7 @@ const BASELINE_AREAS: ParkingArea[] = [
     facultyName: 'Fakultas Ilmu Sosial dan Ilmu Politik',
     description: 'Area parkir berkanopi teduh di dekat Gedung Dekanat dan Aula FISIP.',
     status: 'AVAILABLE',
+    dataSource: 'SIMULATED',
     lastUpdated: new Date().toISOString(),
     notes: 'Area parkir dekat aula utama dan gedung dekanat.',
     mapLocation: { x: 28, y: 72 },
@@ -161,6 +173,7 @@ const BASELINE_AREAS: ParkingArea[] = [
     device: {
       id: 'SIM-NODE-FISIP-04',
       model: 'Simulated Gateway Controller',
+      deviceName: 'SIM-NODE-FISIP-04',
       status: 'ONLINE',
       ipAddress: '192.168.4.88',
       macAddress: '5C:CF:7F:89:12:33',
@@ -168,7 +181,7 @@ const BASELINE_AREAS: ParkingArea[] = [
       firmwareVersion: 'v1.8.0-sim',
       uptimeSeconds: 64000,
       lastHeartbeat: new Date().toISOString(),
-      mqttTopic: 'smartcampus/parking/fisip/telemetry',
+      mqttTopic: 'campus/parking/fisip/node/status',
       sensorCount: 10,
     },
   },
@@ -191,17 +204,20 @@ interface ParkingContextType {
   lastSimEventMessage: string | null;
   searchQuery: string;
   isSupabaseLive: boolean;
+  connectionState: ConnectionState;
+  isLoading: boolean;
+  error: string | null;
   setSearchQuery: (q: string) => void;
   setSimulationActive: (active: boolean) => void;
   setSimulationIntervalMs: (ms: number) => void;
   toggleSlot: (areaId: string, slotId: string) => void;
-  toggleGate: (areaId: string, gateId?: string) => void;
-  updateGateNotes: (areaId: string, notes: string) => void;
-  updateAreaNotes: (areaId: string, notes: string) => void;
+  toggleGate: (areaId: string, gateId?: string) => Promise<void>;
+  updateGateNotes: (areaId: string, notes: string) => Promise<void>;
+  updateAreaNotes: (areaId: string, notes: string) => Promise<void>;
   triggerRandomEvent: () => void;
   markNotificationAsRead: (id: string) => void;
   markAllNotificationsAsRead: () => void;
-  resetAllData: () => void;
+  resetAllData: () => Promise<void>;
   refreshFromSupabase: () => Promise<void>;
   stats: {
     totalAreas: number;
@@ -223,7 +239,7 @@ function calculateAreaStatus(available: number, total: number): AreaStatus {
 }
 
 export function ParkingProvider({ children }: { children: React.ReactNode }) {
-  const [areas, setAreas] = useState<ParkingArea[]>(BASELINE_AREAS);
+  const [areas, setAreas] = useState<ParkingArea[]>(INITIAL_AREAS);
   const [activities, setActivities] = useState<ParkingActivity[]>([]);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [hourlyUsage, setHourlyUsage] = useState<HourlyUsageData[]>(BASELINE_HOURLY);
@@ -232,21 +248,50 @@ export function ParkingProvider({ children }: { children: React.ReactNode }) {
   const [lastSimEventMessage, setLastSimEventMessage] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [isSupabaseLive, setIsSupabaseLive] = useState<boolean>(isSupabaseConfigured);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Status Koneksi Terpadu (MQTT, Database, Device, Backend)
+  const [connectionState, setConnectionState] = useState<ConnectionState>({
+    mqtt: 'CONNECTING',
+    database: isSupabaseConfigured ? 'CONNECTED' : 'DISCONNECTED',
+    device: 'ONLINE',
+    backend: 'DISCONNECTED',
+    lastDataReceived: null,
+  });
+
+  const socketRef = useRef<Socket | null>(null);
 
   // 1. Fetch data dari Supabase saat aplikasi dimuat
   const loadSupabaseData = useCallback(async () => {
-    if (!isSupabaseConfigured) return;
+    if (!isSupabaseConfigured) {
+      setIsLoading(false);
+      return;
+    }
 
-    const data = await fetchParkingDataFromSupabase();
-    if (data && data.areas.length > 0) {
-      setAreas(data.areas);
-      setActivities(data.activities);
-      setNotifications(data.notifications);
-      if (data.hourlyUsage.length > 0) {
-        setHourlyUsage(data.hourlyUsage);
+    try {
+      setIsLoading(true);
+      setError(null);
+      const data = await fetchParkingDataFromSupabase();
+      if (data && data.areas.length > 0) {
+        setAreas(data.areas);
+        setActivities(data.activities);
+        setNotifications(data.notifications);
+        if (data.hourlyUsage.length > 0) {
+          setHourlyUsage(data.hourlyUsage);
+        }
+        setIsSupabaseLive(true);
+        setConnectionState((prev) => ({
+          ...prev,
+          database: 'CONNECTED',
+        }));
       }
-      setIsSupabaseLive(true);
-      setLastSimEventMessage('Terhubung langsung ke database Supabase Cloud.');
+    } catch (err: any) {
+      console.error('Error fetching Supabase data:', err);
+      setError(err.message || 'Gagal memuat data dari Supabase');
+      setConnectionState((prev) => ({ ...prev, database: 'DISCONNECTED' }));
+    } finally {
+      setIsLoading(false);
     }
   }, []);
 
@@ -254,7 +299,166 @@ export function ParkingProvider({ children }: { children: React.ReactNode }) {
     loadSupabaseData();
   }, [loadSupabaseData]);
 
-  // 2. Realtime Subscription Supabase (Mendengarkan perubahan langsung dari cloud)
+  // 2. Hubungkan ke Node.js Backend Realtime (Socket.IO)
+  useEffect(() => {
+    const socket = io(API_BASE_URL, {
+      reconnectionAttempts: 10,
+      reconnectionDelay: 2000,
+      transports: ['websocket', 'polling'],
+    });
+    socketRef.current = socket;
+
+    socket.on('connect', () => {
+      console.log('[Socket.IO] Connected to IoT Backend:', API_BASE_URL);
+      setConnectionState((prev) => ({ ...prev, backend: 'CONNECTED' }));
+    });
+
+    socket.on('disconnect', () => {
+      console.warn('[Socket.IO] Disconnected from IoT Backend.');
+      setConnectionState((prev) => ({ ...prev, backend: 'DISCONNECTED' }));
+    });
+
+    // Menerima update status koneksi aktual dari backend
+    socket.on('system_status', (status: Partial<ConnectionState>) => {
+      setConnectionState((prev) => ({
+        ...prev,
+        ...status,
+        backend: 'CONNECTED',
+      }));
+    });
+
+    // Menerima update status slot real-time dari ESP32 / Backend
+    socket.on('slot_updated', (payload: {
+      areaId: string;
+      slotId: string;
+      slotNumber: string;
+      status: SlotStatus;
+      distance_cm?: number;
+      timestamp: string;
+    }) => {
+      setAreas((prevAreas) =>
+        prevAreas.map((area) => {
+          if (area.id !== payload.areaId) return area;
+
+          const updatedSlots = area.slots.map((s) => {
+            if (s.id === payload.slotId || s.slotNumber === payload.slotNumber) {
+              return {
+                ...s,
+                status: payload.status,
+                distance_cm: payload.distance_cm ?? s.distance_cm,
+                lastChanged: payload.timestamp,
+              };
+            }
+            return s;
+          });
+
+          const newOccupied = updatedSlots.filter((s) => s.status === 'OCCUPIED').length;
+          const newAvailable = updatedSlots.length - newOccupied;
+
+          return {
+            ...area,
+            slots: updatedSlots,
+            status: calculateAreaStatus(newAvailable, updatedSlots.length),
+            lastUpdated: payload.timestamp,
+          };
+        })
+      );
+
+      setConnectionState((prev) => ({
+        ...prev,
+        lastDataReceived: payload.timestamp,
+      }));
+    });
+
+    // Menerima status konfirmasi gerbang dari ESP32
+    socket.on('gate_status_updated', (payload: {
+      areaId: string;
+      gateId: string;
+      status: GateStatus;
+      servoAngle: number;
+      notes?: string;
+      timestamp: string;
+    }) => {
+      setAreas((prevAreas) =>
+        prevAreas.map((area) => {
+          if (area.id !== payload.areaId) return area;
+          return {
+            ...area,
+            gate: {
+              ...area.gate,
+              status: payload.status,
+              servoAngle: payload.servoAngle,
+              notes: payload.notes ?? area.gate.notes,
+              lastToggled: payload.timestamp,
+              isPendingConfirmation: false, // Konfirmasi fisik selesai!
+            },
+          };
+        })
+      );
+    });
+
+    // Status perintah gerbang sedang pending (dikirim ke ESP32)
+    socket.on('gate_command_pending', (payload: { areaId: string; command: string; message: string }) => {
+      setAreas((prevAreas) =>
+        prevAreas.map((area) => {
+          if (area.id !== payload.areaId) return area;
+          return {
+            ...area,
+            gate: {
+              ...area.gate,
+              isPendingConfirmation: true,
+            },
+          };
+        })
+      );
+      setLastSimEventMessage(payload.message);
+    });
+
+    // Menerima update status perangkat ESP32
+    socket.on('device_status_updated', (payload: {
+      deviceId: string;
+      areaId: string;
+      status: 'ONLINE' | 'OFFLINE';
+      rssi?: number;
+      uptimeSeconds?: number;
+      lastHeartbeat: string;
+    }) => {
+      setAreas((prevAreas) =>
+        prevAreas.map((area) => {
+          if (area.id !== payload.areaId) return area;
+          return {
+            ...area,
+            device: {
+              ...area.device,
+              status: payload.status,
+              rssi: payload.rssi ?? area.device.rssi,
+              uptimeSeconds: payload.uptimeSeconds ?? area.device.uptimeSeconds,
+              lastHeartbeat: payload.lastHeartbeat,
+            },
+          };
+        })
+      );
+
+      if (payload.areaId === 'filkom-main') {
+        setConnectionState((prev) => ({
+          ...prev,
+          device: payload.status,
+          lastDataReceived: payload.lastHeartbeat,
+        }));
+      }
+    });
+
+    // Menerima aktivitas baru
+    socket.on('activity_created', (act: ParkingActivity) => {
+      setActivities((prev) => [act, ...prev.slice(0, 49)]);
+    });
+
+    return () => {
+      socket.disconnect();
+    };
+  }, []);
+
+  // 3. Supabase Realtime Subscription (Fallback / Realtime DB layer)
   useEffect(() => {
     if (!isSupabaseConfigured) return;
 
@@ -273,7 +477,12 @@ export function ParkingProvider({ children }: { children: React.ReactNode }) {
 
               const newSlots = area.slots.map((s) =>
                 s.id === updatedSlot.id
-                  ? { ...s, status: updatedSlot.status as SlotStatus, lastChanged: updatedSlot.last_changed }
+                  ? {
+                      ...s,
+                      status: updatedSlot.status as SlotStatus,
+                      distance_cm: updatedSlot.distance_cm ?? s.distance_cm,
+                      lastChanged: updatedSlot.last_changed,
+                    }
                   : s
               );
               const newOccupied = newSlots.filter((s) => s.status === 'OCCUPIED').length;
@@ -307,30 +516,10 @@ export function ParkingProvider({ children }: { children: React.ReactNode }) {
                   servoAngle: updatedGate.servo_angle ?? (updatedGate.status === 'OPEN' ? 90 : 0),
                   notes: updatedGate.notes ?? area.gate.notes,
                   lastToggled: updatedGate.last_toggled || new Date().toISOString(),
+                  isPendingConfirmation: false,
                 },
               };
             })
-          );
-        }
-      )
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'parking_areas' },
-        (payload) => {
-          const updatedArea = payload.new as any;
-          if (!updatedArea || !updatedArea.id) return;
-
-          setAreas((prevAreas) =>
-            prevAreas.map((area) =>
-              area.id === updatedArea.id
-                ? {
-                    ...area,
-                    notes: updatedArea.notes ?? area.notes,
-                    status: (updatedArea.status as AreaStatus) || area.status,
-                    lastUpdated: updatedArea.last_updated || new Date().toISOString(),
-                  }
-                : area
-            )
           );
         }
       )
@@ -349,6 +538,9 @@ export function ParkingProvider({ children }: { children: React.ReactNode }) {
             slotId: newAct.slot_id,
             activity: newAct.activity,
             status: newAct.status,
+            previous_status: newAct.previous_status,
+            current_status: newAct.current_status,
+            data_source: newAct.data_source,
             durationMinutes: newAct.duration_minutes,
           };
           setActivities((prev) => [activityItem, ...prev.slice(0, 49)]);
@@ -372,13 +564,8 @@ export function ParkingProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const resetAllData = useCallback(async () => {
-    if (isSupabaseConfigured) {
-      await loadSupabaseData();
-      setLastSimEventMessage('Data disinkronkan ulang dari Supabase.');
-    } else {
-      setAreas(BASELINE_AREAS);
-      setLastSimEventMessage('Data disinkronkan ke kondisi baseline.');
-    }
+    await loadSupabaseData();
+    setLastSimEventMessage('Data disinkronkan ulang dari Supabase.');
   }, [loadSupabaseData]);
 
   // Toggle Slot (Bisa dikendalikan via Dashboard Admin)
@@ -393,7 +580,7 @@ export function ParkingProvider({ children }: { children: React.ReactNode }) {
         const newStatus: SlotStatus = targetSlot.status === 'AVAILABLE' ? 'OCCUPIED' : 'AVAILABLE';
         const isOccupied = newStatus === 'OCCUPIED';
 
-        // Kirim update ke Supabase di latar belakang
+        // Kirim update ke Supabase / Backend di latar belakang
         updateSlotStatusInSupabase(slotId, newStatus);
 
         const updatedSlots: ParkingSlot[] = area.slots.map((s) => {
@@ -409,19 +596,6 @@ export function ParkingProvider({ children }: { children: React.ReactNode }) {
         const newAvailable = updatedSlots.length - newOccupied;
         const newAreaStatus = calculateAreaStatus(newAvailable, updatedSlots.length);
 
-        // Record Activity Log lokal (jika offline)
-        const newActivity: ParkingActivity = {
-          id: `act-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-          timestamp: new Date().toISOString(),
-          faculty: area.facultyName,
-          areaId: area.id,
-          slotId: targetSlot.slotNumber,
-          activity: isOccupied ? 'IN' : 'OUT',
-          status: newStatus,
-          durationMinutes: isOccupied ? undefined : Math.floor(25 + Math.random() * 180),
-        };
-        setActivities((prev) => [newActivity, ...prev.slice(0, 49)]);
-
         const eventMsg = `${area.facultyName} (${targetSlot.slotNumber}) kini ${newStatus === 'OCCUPIED' ? 'TERISI' : 'KOSONG'}`;
         setLastSimEventMessage(eventMsg);
 
@@ -435,104 +609,98 @@ export function ParkingProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
-  // Toggle Gate Servo (Bisa dikendalikan via Dashboard Admin)
-  const toggleGate = useCallback((areaId: string) => {
+  // Kontrol Gerbang Barrier (Komunikasi 2 Arah via MQTT & ESP32 Confirmation)
+  const toggleGate = useCallback(async (areaId: string, gateId?: string) => {
+    const area = areas.find((a) => a.id === areaId);
+    if (!area) return;
+
+    const nextStatus: GateStatus = area.gate.status === 'CLOSED' ? 'OPEN' : 'CLOSED';
+
+    // Jika area fisik (FILKOM), tandai pending confirmation sampai ESP32 merespon
+    if (area.dataSource === 'REAL' || area.id === 'filkom-main') {
+      setAreas((prev) =>
+        prev.map((a) =>
+          a.id === areaId
+            ? { ...a, gate: { ...a.gate, isPendingConfirmation: true } }
+            : a
+        )
+      );
+      setLastSimEventMessage(`Mengirim perintah buka/tutup ke ESP32 via MQTT...`);
+    }
+
+    const res = await sendGateCommandToBackend(areaId, nextStatus, gateId || area.gate.id);
+    setLastSimEventMessage(res.message);
+  }, [areas]);
+
+  // Update Catatan Gerbang
+  const updateGateNotes = useCallback(async (areaId: string, notes: string) => {
     setAreas((prev) =>
-      prev.map((area) => {
-        if (area.id !== areaId) return area;
-        const nextStatus: GateStatus = area.gate.status === 'CLOSED' ? 'OPEN' : 'CLOSED';
-
-        // Kirim update ke Supabase
-        toggleGateStatusInSupabase(areaId, nextStatus);
-
-        return {
-          ...area,
-          gate: {
-            ...area.gate,
-            status: nextStatus,
-            servoAngle: nextStatus === 'OPEN' ? 90 : 0,
-            lastToggled: new Date().toISOString(),
-          },
-          lastUpdated: new Date().toISOString(),
-        };
-      })
+      prev.map((a) =>
+        a.id === areaId ? { ...a, gate: { ...a.gate, notes } } : a
+      )
     );
+    await updateGateNotesInSupabase(areaId, notes);
+    setLastSimEventMessage(`Catatan gerbang ${areaId} berhasil disimpan.`);
   }, []);
 
-  // Update Catatan Portal (Bisa dikendalikan via Dashboard Admin)
-  const updateGateNotes = useCallback((areaId: string, notes: string) => {
-    updateGateNotesInSupabase(areaId, notes);
+  // Update Catatan Area
+  const updateAreaNotes = useCallback(async (areaId: string, notes: string) => {
     setAreas((prev) =>
-      prev.map((area) => {
-        if (area.id !== areaId) return area;
-        return {
-          ...area,
-          gate: {
-            ...area.gate,
-            notes,
-          },
-        };
-      })
+      prev.map((a) => (a.id === areaId ? { ...a, notes } : a))
     );
+    await updateAreaNotesInSupabase(areaId, notes);
+    setLastSimEventMessage(`Catatan area ${areaId} berhasil disimpan.`);
   }, []);
 
-  // Update Catatan Area Parkir (Bisa dikendalikan via Dashboard Admin)
-  const updateAreaNotes = useCallback((areaId: string, notes: string) => {
-    updateAreaNotesInSupabase(areaId, notes);
-    setAreas((prev) =>
-      prev.map((area) => {
-        if (area.id !== areaId) return area;
-        return {
-          ...area,
-          notes,
-          lastUpdated: new Date().toISOString(),
-        };
-      })
-    );
-  }, []);
+  // Trigger Random Event untuk area SIMULATED
+  const triggerRandomEvent = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/simulation/trigger`, { method: 'POST' });
+      if (res.ok) {
+        const data = await res.json();
+        setLastSimEventMessage(data.message || 'Event simulasi berhasil dieksekusi.');
+        return;
+      }
+    } catch (e) {
+      // local fallback
+    }
 
-  // Random simulation trigger (opsional)
-  const triggerRandomEvent = useCallback(() => {
-    setAreas((currentAreas) => {
-      const simulatedAreas = currentAreas.filter((a) => a.id !== 'filkom-main');
-      const targetArea = simulatedAreas[Math.floor(Math.random() * simulatedAreas.length)];
-      if (!targetArea || targetArea.slots.length === 0) return currentAreas;
+    // Fallback lokal jika backend belum running
+    const simAreas = areas.filter((a) => a.id !== 'filkom-main');
+    if (simAreas.length === 0) return;
+    const randomArea = simAreas[Math.floor(Math.random() * simAreas.length)];
+    const randomSlot = randomArea.slots[Math.floor(Math.random() * randomArea.slots.length)];
+    if (randomSlot) {
+      toggleSlot(randomArea.id, randomSlot.id);
+    }
+  }, [areas, toggleSlot]);
 
-      const randomSlot = targetArea.slots[Math.floor(Math.random() * targetArea.slots.length)];
-      if (!randomSlot) return currentAreas;
-
-      setTimeout(() => {
-        toggleSlot(targetArea.id, randomSlot.id);
-      }, 0);
-
-      return currentAreas;
-    });
-  }, [toggleSlot]);
-
-  // Periodic Simulation loop
-  useEffect(() => {
-    if (!simulationActive) return;
-
-    const interval = setInterval(() => {
-      triggerRandomEvent();
-    }, simulationIntervalMs);
-
-    return () => clearInterval(interval);
-  }, [simulationActive, simulationIntervalMs, triggerRandomEvent]);
+  // Toggle backend background simulation
+  const handleSetSimulationActive = useCallback(async (active: boolean) => {
+    setSimulationActive(active);
+    try {
+      await fetch(`${API_BASE_URL}/api/simulation/toggle`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ active, intervalMs: simulationIntervalMs }),
+      });
+    } catch (e) {
+      // offline fallback
+    }
+  }, [simulationIntervalMs]);
 
   // Compute campus-wide statistics dynamically from slots
   const stats = useMemo(() => {
     const safeAreas = areas || [];
     const totalAreas = safeAreas.length;
-    const totalSlots = safeAreas.reduce((acc, a) => acc + (a?.slots?.length || 0), 0);
+    const totalSlots = safeAreas.reduce((acc, a) => acc + (a.slots?.length || 0), 0);
     const totalOccupied = safeAreas.reduce(
-      (acc, a) =>
-        acc + (a?.slots ? a.slots.filter((s) => s.status === 'OCCUPIED').length : 0),
+      (acc, a) => acc + (a.slots?.filter((s) => s.status === 'OCCUPIED')?.length || 0),
       0
     );
     const totalAvailable = totalSlots - totalOccupied;
     const occupancyRate = totalSlots > 0 ? Math.round((totalOccupied / totalSlots) * 100) : 0;
-    const onlineDevicesCount = safeAreas.filter((a) => a?.device?.status === 'ONLINE').length;
+    const onlineDevicesCount = safeAreas.filter((a) => a.device?.status === 'ONLINE').length;
 
     return {
       totalAreas,
@@ -556,8 +724,11 @@ export function ParkingProvider({ children }: { children: React.ReactNode }) {
         lastSimEventMessage,
         searchQuery,
         isSupabaseLive,
+        connectionState,
+        isLoading,
+        error,
         setSearchQuery,
-        setSimulationActive,
+        setSimulationActive: handleSetSimulationActive,
         setSimulationIntervalMs,
         toggleSlot,
         toggleGate,

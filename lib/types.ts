@@ -2,11 +2,13 @@ export type SlotStatus = 'AVAILABLE' | 'OCCUPIED' | 'UNKNOWN';
 export type AreaStatus = 'AVAILABLE' | 'LIMITED' | 'FULL' | 'OFFLINE';
 export type DeviceStatus = 'ONLINE' | 'OFFLINE';
 export type GateStatus = 'OPEN' | 'CLOSED';
+export type AreaDataSource = 'REAL' | 'SIMULATED' | 'REAL DEVICE';
 
 export interface ParkingSlot {
   id: string;
   slotNumber: string; // e.g. "A1", "A2", "B1"
   status: SlotStatus;
+  distance_cm?: number;
   lastChanged: string;
 }
 
@@ -17,11 +19,13 @@ export interface GateInfo {
   lastToggled: string;
   servoAngle: number;
   notes?: string;
+  isPendingConfirmation?: boolean; // True saat command dikirim ke ESP32 dan menunggu konfirmasi aktual
 }
 
 export interface IotDeviceInfo {
   id: string;
   model: string;
+  deviceName?: string;
   status: DeviceStatus;
   ipAddress: string;
   macAddress: string;
@@ -36,8 +40,10 @@ export interface IotDeviceInfo {
 export interface ParkingArea {
   id: string;
   facultyName: string;
+  name?: string;
   description: string;
   status: AreaStatus;
+  dataSource: AreaDataSource; // REAL (FILKOM ESP32) atau SIMULATED (Fakultas lain)
   lastUpdated: string;
   mapLocation: {
     x: number; // percentage 0-100
@@ -57,6 +63,9 @@ export interface ParkingActivity {
   slotId: string;
   activity: 'IN' | 'OUT' | 'GATE_TRIGGER' | 'SYSTEM_CHECK';
   status: SlotStatus;
+  previous_status?: SlotStatus;
+  current_status?: SlotStatus;
+  data_source?: string;
   durationMinutes?: number;
 }
 
@@ -77,6 +86,14 @@ export interface HourlyUsageData {
   occupancyRate: number; // percentage
 }
 
+export interface ConnectionState {
+  mqtt: 'CONNECTED' | 'DISCONNECTED' | 'CONNECTING' | 'CONFIG_REQUIRED';
+  database: 'CONNECTED' | 'DISCONNECTED' | 'CONNECTING';
+  device: 'ONLINE' | 'OFFLINE';
+  backend: 'CONNECTED' | 'DISCONNECTED';
+  lastDataReceived: string | null;
+}
+
 // Derived helpers from slots
 export function getAreaCapacity(area: ParkingArea): number {
   return area.slots.length;
@@ -95,4 +112,3 @@ export function getAreaOccupancyRate(area: ParkingArea): number {
   if (total === 0) return 0;
   return Math.round((getAreaOccupied(area) / total) * 100);
 }
-

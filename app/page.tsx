@@ -7,6 +7,8 @@ import { ParkingAreaCard } from '@/components/areas/ParkingAreaCard';
 import { CampusParkingMap } from '@/components/map/CampusParkingMap';
 import { useParking } from '@/context/ParkingContext';
 import { ParkingStatusBadge } from '@/components/common/ParkingStatusBadge';
+import { ConnectionStatusBar } from '@/components/common/ConnectionStatusBar';
+import { DataSourceBadge } from '@/components/common/DataSourceBadge';
 import {
   Search,
   Grid,
@@ -69,6 +71,9 @@ function UserParkingContent() {
 
   return (
     <div className="space-y-6">
+      {/* Realtime IoT & Database Connection Status Bar */}
+      <ConnectionStatusBar />
+
       {/* Top Header Card (Consistent Blue SaaS Theme) */}
       <div className="bg-white rounded-2xl border border-slate-200/90 p-5 sm:p-6 shadow-xs space-y-4">
         <div className="flex flex-col gap-1">

@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { GateInfo } from '@/lib/types';
-import { DoorClosed, DoorOpen, ShieldCheck, Power, FileText, Check } from 'lucide-react';
+import { DoorClosed, DoorOpen, ShieldCheck, Power, FileText, Check, Loader2 } from 'lucide-react';
 import { TimeAgo } from '@/components/common/TimeAgo';
 
 interface GateStatusCardProps {
@@ -87,28 +87,48 @@ export function GateStatusCard({
             </div>
 
             <div className="flex items-center gap-2 self-start sm:self-auto">
-              <span
-                className={`text-xs font-bold px-2.5 py-1 rounded-full border ${
-                  isOpen
-                    ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
-                    : 'bg-slate-200 text-slate-800 border-slate-300'
-                }`}
-              >
-                {isOpen ? 'TERBUKA (OPEN)' : 'TERTUTUP (CLOSED)'}
-              </span>
+              {gate.isPendingConfirmation ? (
+                <span className="text-xs font-bold px-2.5 py-1 rounded-full border bg-amber-100 text-amber-900 border-amber-300 flex items-center gap-1.5 animate-pulse">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-700" />
+                  Menunggu Konfirmasi ESP32...
+                </span>
+              ) : (
+                <span
+                  className={`text-xs font-bold px-2.5 py-1 rounded-full border ${
+                    isOpen
+                      ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                      : 'bg-slate-200 text-slate-800 border-slate-300'
+                  }`}
+                >
+                  {isOpen ? 'TERBUKA (OPEN)' : 'TERTUTUP (CLOSED)'}
+                </span>
+              )}
 
               {!readOnly && onToggleGate && (
                 <button
                   type="button"
+                  disabled={gate.isPendingConfirmation}
                   onClick={() => onToggleGate(areaId, gate.id)}
                   className={`py-1.5 px-3.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs ${
-                    isOpen
+                    gate.isPendingConfirmation
+                      ? 'bg-slate-300 text-slate-500 cursor-not-allowed'
+                      : isOpen
                       ? 'bg-slate-800 text-white hover:bg-slate-900'
                       : 'bg-emerald-600 text-white hover:bg-emerald-700'
                   }`}
                 >
-                  <Power className="w-3.5 h-3.5" />
-                  <span>{isOpen ? 'Tutup Portal (0°)' : 'Buka Portal (90°)'}</span>
+                  {gate.isPendingConfirmation ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Power className="w-3.5 h-3.5" />
+                  )}
+                  <span>
+                    {gate.isPendingConfirmation
+                      ? 'Memproses MQTT...'
+                      : isOpen
+                      ? 'Tutup Portal (0°)'
+                      : 'Buka Portal (90°)'}
+                  </span>
                 </button>
               )}
             </div>

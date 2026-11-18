@@ -4,6 +4,7 @@ import React from 'react';
 import Link from 'next/link';
 import { ParkingArea } from '@/lib/types';
 import { ParkingStatusBadge } from '@/components/common/ParkingStatusBadge';
+import { DataSourceBadge } from '@/components/common/DataSourceBadge';
 import {
   CheckCircle2,
   AlertCircle,
@@ -29,12 +30,18 @@ export function ParkingAreaCard({ area }: ParkingAreaCardProps) {
   return (
     <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs hover:shadow-md hover:border-blue-300 transition-all duration-200 flex flex-col justify-between group">
       <div>
-        {/* Header: Faculty Name & Status Badge */}
+        {/* Header: Faculty Name, Data Source Badge & Status Badge */}
         <div className="flex items-start justify-between gap-2">
           <div>
-            <h3 className="font-bold text-slate-900 text-base group-hover:text-blue-600 transition-colors">
-              {area.facultyName}
-            </h3>
+            <div className="flex items-center gap-2">
+              <h3 className="font-bold text-slate-900 text-base group-hover:text-blue-600 transition-colors">
+                {area.facultyName}
+              </h3>
+              <DataSourceBadge
+                source={area.dataSource === 'REAL' ? 'REAL DEVICE' : 'SIMULATED'}
+                size="sm"
+              />
+            </div>
             {area.notes ? (
               <p className="text-xs text-blue-700 font-medium mt-1 line-clamp-2">
                 {area.notes}

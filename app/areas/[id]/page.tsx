@@ -9,6 +9,8 @@ import { ParkingSlotItem } from '@/components/areas/ParkingSlotItem';
 import { GateStatusCard } from '@/components/areas/GateStatusCard';
 import { Esp32DeviceCard } from '@/components/areas/Esp32DeviceCard';
 import { ParkingStatusBadge } from '@/components/common/ParkingStatusBadge';
+import { DataSourceBadge } from '@/components/common/DataSourceBadge';
+import { ConnectionStatusBar } from '@/components/common/ConnectionStatusBar';
 import {
   ArrowLeft,
   SquareParking,
@@ -59,6 +61,9 @@ function AreaDetailInner() {
 
   return (
     <div className="space-y-6">
+      {/* Realtime IoT & Database Connection Status Bar */}
+      <ConnectionStatusBar />
+
       {/* Navigation & Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2">
         <div className="space-y-1">
@@ -74,6 +79,10 @@ function AreaDetailInner() {
             <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">
               {area.facultyName}
             </h1>
+            <DataSourceBadge
+              source={area.dataSource === 'REAL' ? 'REAL DEVICE' : 'SIMULATED'}
+              size="sm"
+            />
             <ParkingStatusBadge status={area.status} />
           </div>
 
