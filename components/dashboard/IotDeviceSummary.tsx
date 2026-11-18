@@ -16,17 +16,16 @@ import {
   DoorClosed,
   DoorOpen,
 } from 'lucide-react';
-import { DataSourceBadge } from '@/components/common/DataSourceBadge';
 import { TimeAgo } from '@/components/common/TimeAgo';
 
 export function IotDeviceSummary() {
   const { areas, toggleGate } = useParking();
-  const fasilkomArea = areas.find((a) => a.id === 'fasilkom-main');
+  const filkomArea = areas.find((a) => a.id === 'filkom-main');
 
-  if (!fasilkomArea) return null;
+  if (!filkomArea) return null;
 
-  const device = fasilkomArea.device;
-  const gates = fasilkomArea.gates;
+  const device = filkomArea.device;
+  const gate = filkomArea.gate;
 
   return (
     <div className="bg-white rounded-xl border border-slate-200/90 p-5 shadow-xs">
@@ -37,11 +36,10 @@ export function IotDeviceSummary() {
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h2 className="text-sm font-bold text-slate-900">{device.name}</h2>
-              <DataSourceBadge source="REAL DEVICE" size="sm" />
+              <h2 className="text-sm font-bold text-slate-900 font-mono">{device.id}</h2>
             </div>
             <p className="text-xs text-slate-500 font-mono">
-              ID: {device.id} • Model: {device.model}
+              Model: {device.model}
             </p>
           </div>
         </div>
@@ -53,7 +51,7 @@ export function IotDeviceSummary() {
           </span>
 
           <Link
-            href={`/areas/${fasilkomArea.id}`}
+            href={`/areas/${filkomArea.id}`}
             className="p-1.5 rounded-lg text-slate-500 hover:text-blue-600 hover:bg-slate-100 transition-colors"
             title="Buka Halaman Detail ESP32"
           >
@@ -99,48 +97,38 @@ export function IotDeviceSummary() {
             <Radio className="w-3 h-3 text-blue-600" /> MQTT Topic Prefix
           </span>
           <span className="font-mono font-semibold text-slate-800 text-[10px] block mt-1 truncate">
-            smartcampus/fasilkom/#
+            smartcampus/filkom/#
           </span>
           <span className="text-[10px] text-slate-500 font-mono">QoS 1 • Ping OK</span>
         </div>
       </div>
 
-      {/* Live Gates Status */}
+      {/* Live Portal Status */}
       <div className="pt-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
         <div className="flex items-center gap-3">
-          <span className="font-semibold text-slate-700">Status Gerbang Barrier:</span>
-          {gates.map((gate) => {
-            const isOpen = gate.status === 'OPEN';
-            return (
-              <div
-                key={gate.id}
-                className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-slate-200 bg-slate-50"
-              >
-                {isOpen ? (
-                  <DoorOpen className="w-3.5 h-3.5 text-emerald-600" />
-                ) : (
-                  <DoorClosed className="w-3.5 h-3.5 text-slate-500" />
-                )}
-                <span className="font-medium text-slate-700">
-                  {gate.type === 'ENTRY' ? 'Masuk' : 'Keluar'}:
-                </span>
-                <span
-                  className={`font-bold ${
-                    isOpen ? 'text-emerald-600' : 'text-slate-600'
-                  }`}
-                >
-                  {gate.status}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => toggleGate(fasilkomArea.id, gate.id)}
-                  className="ml-1 text-[10px] text-blue-600 hover:text-blue-800 font-semibold underline cursor-pointer"
-                >
-                  Ubah
-                </button>
-              </div>
-            );
-          })}
+          <span className="font-semibold text-slate-700">Status Portal:</span>
+          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-slate-200 bg-slate-50">
+            {gate.status === 'OPEN' ? (
+              <DoorOpen className="w-3.5 h-3.5 text-emerald-600" />
+            ) : (
+              <DoorClosed className="w-3.5 h-3.5 text-slate-500" />
+            )}
+            <span className="font-medium text-slate-700">{gate.name}:</span>
+            <span
+              className={`font-bold ${
+                gate.status === 'OPEN' ? 'text-emerald-600' : 'text-slate-600'
+              }`}
+            >
+              {gate.status}
+            </span>
+            <button
+              type="button"
+              onClick={() => toggleGate(filkomArea.id, gate.id)}
+              className="ml-1 text-[10px] text-blue-600 hover:text-blue-800 font-semibold underline cursor-pointer"
+            >
+              Ubah
+            </button>
+          </div>
         </div>
 
         <div className="text-[11px] text-slate-400 flex items-center gap-1">

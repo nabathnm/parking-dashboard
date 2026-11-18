@@ -9,24 +9,23 @@ import { ParkingSlotItem } from '@/components/areas/ParkingSlotItem';
 import { GateStatusCard } from '@/components/areas/GateStatusCard';
 import { Esp32DeviceCard } from '@/components/areas/Esp32DeviceCard';
 import { ParkingStatusBadge } from '@/components/common/ParkingStatusBadge';
-import { DataSourceBadge } from '@/components/common/DataSourceBadge';
 import {
   ArrowLeft,
   SquareParking,
   CheckCircle2,
   AlertCircle,
   Cpu,
-  Car,
-  RefreshCw,
+  Eye,
   History,
+  Lock,
 } from 'lucide-react';
 import { TimeAgo } from '@/components/common/TimeAgo';
 
 function AreaDetailInner() {
   const params = useParams();
-  const areaId = (params?.id as string) || 'fasilkom-main';
+  const areaId = (params?.id as string) || 'filkom-main';
 
-  const { areas, activities, toggleSlot, toggleGate } = useParking();
+  const { areas, activities } = useParking();
   const area = areas.find((a) => a.id === areaId);
 
   if (!area) {
@@ -40,10 +39,10 @@ function AreaDetailInner() {
           Area parkir dengan ID &quot;{areaId}&quot; tidak terdaftar di sistem.
         </p>
         <Link
-          href="/areas"
+          href="/"
           className="mt-4 inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700"
         >
-          <ArrowLeft className="w-4 h-4" /> Kembali ke Daftar Area
+          <ArrowLeft className="w-4 h-4" /> Kembali ke Daftar Ketersediaan
         </Link>
       </div>
     );
@@ -52,24 +51,11 @@ function AreaDetailInner() {
   // Activities related to this area
   const areaActivities = activities.filter((act) => act.areaId === area.id).slice(0, 8);
 
-  // Quick simulation helper
-  const handleSimulateIn = () => {
-    const availableSlot = area.slots.find((s) => s.status === 'AVAILABLE');
-    if (availableSlot) {
-      toggleSlot(area.id, availableSlot.id);
-    }
-  };
-
-  const handleSimulateOut = () => {
-    const occupiedSlot = area.slots.find((s) => s.status === 'OCCUPIED');
-    if (occupiedSlot) {
-      toggleSlot(area.id, occupiedSlot.id);
-    }
-  };
-
-  const occupancyRate = Math.round(
-    (area.occupiedSlots / area.totalCapacity) * 100
-  );
+  const totalCapacity = area.slots.length;
+  const occupiedSlots = area.slots.filter((s) => s.status === 'OCCUPIED').length;
+  const availableSlots = area.slots.filter((s) => s.status === 'AVAILABLE').length;
+  const occupancyRate =
+    totalCapacity > 0 ? Math.round((occupiedSlots / totalCapacity) * 100) : 0;
 
   return (
     <div className="space-y-6">
@@ -77,49 +63,37 @@ function AreaDetailInner() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2">
         <div className="space-y-1">
           <Link
-            href="/areas"
+            href="/"
             className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-blue-600 transition-colors"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
-            Kembali ke Daftar Area
+            Kembali ke Daftar Ketersediaan
           </Link>
 
           <div className="flex flex-wrap items-center gap-2 pt-1">
             <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">
               {area.facultyName}
             </h1>
-            <DataSourceBadge source={area.dataSource} />
             <ParkingStatusBadge status={area.status} />
           </div>
 
-          <p className="text-xs text-slate-500">
-            {area.code} • {area.areaName}
-          </p>
+          {area.notes ? (
+            <p className="text-xs text-blue-700 font-medium">
+              {area.notes}
+            </p>
+          ) : (
+            <p className="text-xs text-slate-500">
+              {area.description}
+            </p>
+          )}
         </div>
 
-        {/* Demo Action Buttons */}
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={handleSimulateIn}
-            disabled={area.availableSlots === 0}
-            className="px-3 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:bg-slate-200 text-white disabled:text-slate-400 text-xs font-semibold flex items-center gap-1.5 transition-all shadow-2xs cursor-pointer disabled:cursor-not-allowed"
-            title="Simulasikan mobil masuk mengisi slot kosong pertama"
-          >
-            <Car className="w-3.5 h-3.5" />
-            <span>Simulasi Kendaraan Masuk</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={handleSimulateOut}
-            disabled={area.occupiedSlots === 0}
-            className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-900 disabled:bg-slate-200 text-white disabled:text-slate-400 text-xs font-semibold flex items-center gap-1.5 transition-all shadow-2xs cursor-pointer disabled:cursor-not-allowed"
-            title="Simulasikan mobil keluar mengosongkan slot terisi"
-          >
-            <RefreshCw className="w-3.5 h-3.5" />
-            <span>Simulasi Kendaraan Keluar</span>
-          </button>
+        {/* Read-Only Status Badge */}
+        <div className="flex items-center">
+          <span className="px-3 py-1.5 rounded-xl bg-blue-50 text-blue-700 text-xs font-semibold flex items-center gap-1.5 border border-blue-200 shadow-2xs">
+            <Lock className="w-3.5 h-3.5 text-blue-600" />
+            <span>Mode Mahasiswa (Hanya Baca)</span>
+          </span>
         </div>
       </div>
 
@@ -128,40 +102,40 @@ function AreaDetailInner() {
         <div className="p-4 rounded-xl bg-white border border-slate-200/90 shadow-xs">
           <span className="text-xs text-slate-500 font-medium">Total Kapasitas</span>
           <div className="mt-1 flex items-baseline gap-2">
-            <span className="text-2xl font-bold text-slate-900">{area.totalCapacity}</span>
+            <span className="text-2xl font-bold text-slate-900">{totalCapacity}</span>
             <span className="text-xs text-slate-400">Slot</span>
           </div>
-          <p className="text-[11px] text-slate-400 mt-2">Daya tampung area</p>
+          <p className="text-[11px] text-slate-400 mt-2">Daya tampung area parkir</p>
         </div>
 
         <div className="p-4 rounded-xl bg-white border border-slate-200/90 shadow-xs">
-          <span className="text-xs text-slate-500 font-medium flex items-center gap-1 text-emerald-700">
+          <span className="text-xs font-semibold flex items-center gap-1 text-emerald-700">
             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-            Slot Tersedia
+            Slot Kosong
           </span>
           <div className="mt-1 flex items-baseline gap-2">
-            <span className="text-2xl font-bold text-emerald-600">{area.availableSlots}</span>
+            <span className="text-2xl font-bold text-emerald-600">{availableSlots}</span>
             <span className="text-xs text-emerald-700 font-medium">Slot</span>
           </div>
           <p className="text-[11px] text-emerald-600 mt-2 font-medium">Siap untuk digunakan</p>
         </div>
 
         <div className="p-4 rounded-xl bg-white border border-slate-200/90 shadow-xs">
-          <span className="text-xs text-slate-500 font-medium flex items-center gap-1 text-rose-700">
+          <span className="text-xs font-semibold flex items-center gap-1 text-rose-700">
             <AlertCircle className="w-3.5 h-3.5 text-rose-600" />
             Slot Terisi
           </span>
           <div className="mt-1 flex items-baseline gap-2">
-            <span className="text-2xl font-bold text-rose-600">{area.occupiedSlots}</span>
+            <span className="text-2xl font-bold text-rose-600">{occupiedSlots}</span>
             <span className="text-xs text-rose-700 font-medium">Kendaraan</span>
           </div>
           <p className="text-[11px] text-rose-600 mt-2 font-medium">Okupansi {occupancyRate}%</p>
         </div>
 
         <div className="p-4 rounded-xl bg-white border border-slate-200/90 shadow-xs">
-          <span className="text-xs text-slate-500 font-medium flex items-center gap-1 text-blue-700">
+          <span className="text-xs font-semibold flex items-center gap-1 text-blue-700">
             <Cpu className="w-3.5 h-3.5 text-blue-600" />
-            Status IoT Gateway
+            Status Node IoT
           </span>
           <div className="mt-1 flex items-baseline gap-2">
             <span className="text-lg font-bold text-slate-900 flex items-center gap-1.5">
@@ -175,38 +149,24 @@ function AreaDetailInner() {
         </div>
       </div>
 
-      {/* Real Device Special Banner for Fasilkom */}
-      {area.dataSource === 'REAL DEVICE' && (
-        <div className="p-4 rounded-xl bg-linear-to-r from-blue-50 to-indigo-50 border border-blue-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-xs">
-              <Cpu className="w-5 h-5" />
-            </div>
-            <div>
-              <p className="font-bold text-blue-900 text-sm">
-                Live Demonstrasi Sensor IoT Fasilkom (4-Sensor Grid)
-              </p>
-              <p className="text-blue-700 mt-0.5">
-                Setiap slot terhubung langsung ke sensor ultrasonik HC-SR04 dengan pembacaan jarak presisi. Klik kartu slot di bawah untuk menguji perubahan status secara instan!
-              </p>
-            </div>
-          </div>
-          <span className="px-3 py-1 rounded-full bg-blue-100 text-blue-800 font-mono text-[11px] font-bold shrink-0 self-start sm:self-auto">
-            PIN HC-SR04: Trig 5, Echo 18,19,21,22
-          </span>
-        </div>
-      )}
 
-      {/* PARKING SLOT VISUALIZATION GRID */}
+      {/* PORTAL GATE STATUS CARD (1 Portal Barrier) */}
+      <GateStatusCard
+        gate={area.gate}
+        areaId={area.id}
+        readOnly={true}
+      />
+
+      {/* READ-ONLY PARKING SLOT VISUALIZATION GRID */}
       <div className="bg-white rounded-xl border border-slate-200/90 p-5 shadow-xs space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-slate-100 gap-2">
           <div>
             <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
               <SquareParking className="w-4 h-4 text-blue-600" />
-              Denah & Grid Visualisasi Slot Parkir
+              Denah Visual Slot Parkir (Tampilan Pengguna)
             </h2>
             <p className="text-xs text-slate-500 mt-0.5">
-              Representasi tata letak fisik tempat parkir. Klik pada slot mana saja untuk menyimulasikan kendaraan.
+              Posisi fisik slot parkir di area {area.facultyName}. Slot hijau menunjukkan tempat parkir yang sedang kosong.
             </p>
           </div>
 
@@ -214,19 +174,21 @@ function AreaDetailInner() {
           <div className="flex items-center gap-3 text-xs">
             <span className="flex items-center gap-1.5 text-slate-600">
               <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
-              Tersedia (Kosong)
+              Kosong (Tersedia)
             </span>
             <span className="flex items-center gap-1.5 text-slate-600">
               <span className="w-2.5 h-2.5 rounded-full bg-rose-500" />
-              Terisi (Mobil)
+              Terisi Mobil
             </span>
           </div>
         </div>
 
-        {/* Slot Grid Container */}
+        {/* Slot Grid Container (Read-Only) */}
         <div
           className={`grid gap-4 ${
-            area.totalCapacity <= 4
+            totalCapacity <= 2
+              ? 'grid-cols-1 sm:grid-cols-2 max-w-2xl'
+              : totalCapacity <= 4
               ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-4'
               : 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6'
           }`}
@@ -236,29 +198,16 @@ function AreaDetailInner() {
               key={slot.id}
               slot={slot}
               areaId={area.id}
-              onToggle={toggleSlot}
-              isRealDevice={area.dataSource === 'REAL DEVICE'}
+              isRealDevice={area.id === 'filkom-main'}
+              readOnly={true}
             />
           ))}
         </div>
 
         <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-400">
-          <span>Ambang batas deteksi ultrasonik: &lt; 50 cm = Terisi, &gt; 100 cm = Kosong</span>
-          <span>Update sinkronisasi: Realtime</span>
+          <span>Sensor ultrasonik mendeteksi keberadaan mobil berdasarkan pantulan gelombang (&lt;50 cm = terisi).</span>
+          <span className="font-medium text-slate-500">Mode: Read-Only</span>
         </div>
-      </div>
-
-      {/* 2 Column: Gate Barrier Control + Hardware Specs */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <GateStatusCard
-          gates={area.gates}
-          areaId={area.id}
-          onToggleGate={toggleGate}
-        />
-        <Esp32DeviceCard
-          device={area.device}
-          isRealDevice={area.dataSource === 'REAL DEVICE'}
-        />
       </div>
 
       {/* Recent Area Activity Log */}
@@ -266,14 +215,9 @@ function AreaDetailInner() {
         <div className="flex items-center justify-between pb-3 border-b border-slate-100">
           <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
             <History className="w-4 h-4 text-blue-600" />
-            Log Aktivitas Terkini Area Ini
+            Riwayat Pergerakan Kendaraan Terkini
           </h3>
-          <Link
-            href="/history"
-            className="text-xs font-semibold text-blue-600 hover:text-blue-800"
-          >
-            Lihat Riwayat Lengkap →
-          </Link>
+          <span className="text-xs text-slate-400">{area.facultyName}</span>
         </div>
 
         <div className="mt-3 divide-y divide-slate-100 text-xs">
@@ -299,11 +243,11 @@ function AreaDetailInner() {
                   </span>
                   <div>
                     <p className="font-semibold text-slate-800">
-                      Slot {act.slotId} — Kendaraan{' '}
-                      {act.activity === 'IN' ? 'Masuk' : 'Keluar'}
+                      Slot {act.slotId} — Mobil{' '}
+                      {act.activity === 'IN' ? 'Terdeteksi Masuk' : 'Terdeteksi Keluar'}
                     </p>
                     <p className="text-[11px] text-slate-500 font-mono">
-                      {act.vehiclePlate || 'B 1000 UN'}
+                      Status Slot: {act.status === 'OCCUPIED' ? 'Terisi' : 'Kosong'}
                     </p>
                   </div>
                 </div>
@@ -327,16 +271,10 @@ function AreaDetailInner() {
   );
 }
 
-export default function ParkingAreaDetailPage() {
+export default function AreaDetailPage() {
   return (
     <DashboardLayout>
-      <Suspense
-        fallback={
-          <div className="p-8 text-center text-xs text-slate-400">
-            Memuat data detail area parkir...
-          </div>
-        }
-      >
+      <Suspense fallback={<div className="p-8 text-center text-xs text-slate-400">Memuat detail area...</div>}>
         <AreaDetailInner />
       </Suspense>
     </DashboardLayout>

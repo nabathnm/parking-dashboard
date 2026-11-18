@@ -2,31 +2,25 @@ export type SlotStatus = 'AVAILABLE' | 'OCCUPIED' | 'UNKNOWN';
 export type AreaStatus = 'AVAILABLE' | 'LIMITED' | 'FULL' | 'OFFLINE';
 export type DeviceStatus = 'ONLINE' | 'OFFLINE';
 export type GateStatus = 'OPEN' | 'CLOSED';
-export type DataSource = 'REAL DEVICE' | 'SIMULATED';
 
 export interface ParkingSlot {
   id: string;
   slotNumber: string; // e.g. "A1", "A2", "B1"
   status: SlotStatus;
-  distanceCm: number; // ultrasonic sensor distance in cm
   lastChanged: string;
-  vehicleType: 'CAR' | 'MOTORCYCLE';
-  sensorId?: string;
-  notes?: string;
 }
 
 export interface GateInfo {
   id: string;
   name: string;
-  type: 'ENTRY' | 'EXIT';
   status: GateStatus;
   lastToggled: string;
   servoAngle: number;
+  notes?: string;
 }
 
 export interface IotDeviceInfo {
   id: string;
-  name: string;
   model: string;
   status: DeviceStatus;
   ipAddress: string;
@@ -42,37 +36,28 @@ export interface IotDeviceInfo {
 export interface ParkingArea {
   id: string;
   facultyName: string;
-  areaName: string;
-  code: string;
   description: string;
-  dataSource: DataSource;
-  totalCapacity: number;
-  availableSlots: number;
-  occupiedSlots: number;
   status: AreaStatus;
   lastUpdated: string;
-  // Campus map coordinates (percentage on blueprint canvas)
   mapLocation: {
     x: number; // percentage 0-100
     y: number; // percentage 0-100
-    buildingLabel: string;
   };
   slots: ParkingSlot[];
-  gates: GateInfo[];
+  gate: GateInfo; // 1 portal per area
   device: IotDeviceInfo;
+  notes?: string; // notes untuk parking area
 }
 
 export interface ParkingActivity {
   id: string;
   timestamp: string;
   faculty: string;
-  parkingArea: string;
   areaId: string;
   slotId: string;
   activity: 'IN' | 'OUT' | 'GATE_TRIGGER' | 'SYSTEM_CHECK';
   status: SlotStatus;
   durationMinutes?: number;
-  vehiclePlate?: string;
 }
 
 export interface NotificationItem {
@@ -90,5 +75,24 @@ export interface HourlyUsageData {
   occupied: number;
   available: number;
   occupancyRate: number; // percentage
+}
+
+// Derived helpers from slots
+export function getAreaCapacity(area: ParkingArea): number {
+  return area.slots.length;
+}
+
+export function getAreaOccupied(area: ParkingArea): number {
+  return area.slots.filter((s) => s.status === 'OCCUPIED').length;
+}
+
+export function getAreaAvailable(area: ParkingArea): number {
+  return area.slots.filter((s) => s.status === 'AVAILABLE').length;
+}
+
+export function getAreaOccupancyRate(area: ParkingArea): number {
+  const total = area.slots.length;
+  if (total === 0) return 0;
+  return Math.round((getAreaOccupied(area) / total) * 100);
 }
 

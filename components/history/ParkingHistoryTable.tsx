@@ -33,9 +33,7 @@ export function ParkingHistoryTable() {
       // Search keyword
       const matchesSearch =
         item.faculty.toLowerCase().includes(search.toLowerCase()) ||
-        item.parkingArea.toLowerCase().includes(search.toLowerCase()) ||
-        item.slotId.toLowerCase().includes(search.toLowerCase()) ||
-        (item.vehiclePlate && item.vehiclePlate.toLowerCase().includes(search.toLowerCase()));
+        item.slotId.toLowerCase().includes(search.toLowerCase());
 
       // Faculty filter
       const matchesFaculty =
@@ -59,15 +57,13 @@ export function ParkingHistoryTable() {
 
   // Export to CSV function
   const exportToCSV = () => {
-    const headers = ['Timestamp', 'Faculty', 'Parking Area', 'Slot ID', 'Activity', 'Status', 'Vehicle Plate', 'Duration (Min)'];
+    const headers = ['Timestamp', 'Faculty', 'Slot ID', 'Activity', 'Status', 'Duration (Min)'];
     const rows = filteredActivities.map((act) => [
       act.timestamp,
       `"${act.faculty}"`,
-      `"${act.parkingArea}"`,
       act.slotId,
       act.activity,
       act.status,
-      act.vehiclePlate || '-',
       act.durationMinutes || '-',
     ]);
 
@@ -127,7 +123,7 @@ export function ParkingHistoryTable() {
               <option value="ALL">Semua Fakultas</option>
               {areas.map((a) => (
                 <option key={a.id} value={a.id}>
-                  {a.facultyName} ({a.code})
+                  {a.facultyName}
                 </option>
               ))}
             </select>
@@ -196,18 +192,17 @@ export function ParkingHistoryTable() {
             <thead className="bg-slate-50/75 border-b border-slate-200/80 text-slate-500 uppercase tracking-wider font-semibold">
               <tr>
                 <th className="py-3 px-4 sm:px-6">Waktu (WIB)</th>
-                <th className="py-3 px-4">Fakultas & Area</th>
+                <th className="py-3 px-4">Fakultas</th>
                 <th className="py-3 px-4">ID Slot</th>
                 <th className="py-3 px-4">Aktivitas</th>
                 <th className="py-3 px-4">Status Akhir</th>
-                <th className="py-3 px-4">Plat Kendaraan</th>
                 <th className="py-3 px-4 text-right">Durasi Parkir</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {filteredActivities.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="py-12 text-center text-slate-500 text-xs">
+                  <td colSpan={6} className="py-12 text-center text-slate-500 text-xs">
                     Tidak ada aktivitas parkir yang sesuai dengan filter.
                   </td>
                 </tr>
@@ -240,9 +235,6 @@ export function ParkingHistoryTable() {
                         <div className="font-semibold text-slate-800">
                           {act.faculty}
                         </div>
-                        <p className="text-[11px] text-slate-400 truncate max-w-xs">
-                          {act.parkingArea}
-                        </p>
                       </td>
 
                       {/* Slot ID */}
@@ -273,11 +265,6 @@ export function ParkingHistoryTable() {
                       {/* Status */}
                       <td className="py-3 px-4">
                         <ParkingStatusBadge status={act.status} size="sm" />
-                      </td>
-
-                      {/* Vehicle Plate */}
-                      <td className="py-3 px-4 font-mono font-semibold text-slate-700">
-                        {act.vehiclePlate || 'B 1234 XY'}
                       </td>
 
                       {/* Duration */}

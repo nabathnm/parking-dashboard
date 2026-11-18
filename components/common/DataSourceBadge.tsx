@@ -1,7 +1,8 @@
 import React from 'react';
-import { DataSource } from '@/lib/types';
 import { Cpu, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
+
+export type DataSource = 'REAL DEVICE' | 'SIMULATED';
 
 interface DataSourceBadgeProps {
   source: DataSource;

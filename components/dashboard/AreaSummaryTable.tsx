@@ -4,7 +4,6 @@ import React from 'react';
 import Link from 'next/link';
 import { useParking } from '@/context/ParkingContext';
 import { ParkingStatusBadge } from '@/components/common/ParkingStatusBadge';
-import { DataSourceBadge } from '@/components/common/DataSourceBadge';
 import { ArrowRight, Cpu, Car, Layers } from 'lucide-react';
 import { formatTimeAgo } from '@/lib/utils';
 
@@ -47,9 +46,10 @@ export function AreaSummaryTable() {
           </thead>
           <tbody className="divide-y divide-slate-100">
             {areas.map((area) => {
-              const occupancyPercent = Math.round(
-                (area.occupiedSlots / area.totalCapacity) * 100
-              );
+              const total = area.slots.length;
+              const occupied = area.slots.filter((s) => s.status === 'OCCUPIED').length;
+              const available = area.slots.filter((s) => s.status === 'AVAILABLE').length;
+              const occupancyPercent = total > 0 ? Math.round((occupied / total) * 100) : 0;
 
               return (
                 <tr
@@ -60,32 +60,31 @@ export function AreaSummaryTable() {
                     <div>
                       <div className="font-bold text-slate-900 group-hover:text-blue-600 transition-colors flex items-center gap-1.5">
                         {area.facultyName}
-                        {area.dataSource === 'REAL DEVICE' && (
-                          <span className="w-2 h-2 rounded-full bg-blue-600 animate-pulse" />
-                        )}
                       </div>
                       <p className="text-[11px] text-slate-500">
-                        {area.code} • {area.areaName}
+                        {area.notes || area.description}
                       </p>
                     </div>
                   </td>
 
                   <td className="py-3.5 px-4">
-                    <DataSourceBadge source={area.dataSource} size="sm" />
+                    <span className="text-xs text-slate-600 font-medium">
+                      Portal: {area.gate.status}
+                    </span>
                   </td>
 
                   <td className="py-3.5 px-4">
                     <div className="flex items-baseline gap-1.5">
                       <span className="text-sm font-bold text-emerald-600">
-                        {area.availableSlots}
+                        {available}
                       </span>
                       <span className="text-slate-400">/</span>
                       <span className="text-slate-600 font-medium">
-                        {area.totalCapacity} Slot
+                        {total} Slot
                       </span>
                     </div>
                     <span className="text-[10px] text-slate-400">
-                      Terisi {area.occupiedSlots}
+                      Terisi {occupied}
                     </span>
                   </td>
 

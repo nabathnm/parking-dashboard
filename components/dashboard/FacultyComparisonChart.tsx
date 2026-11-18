@@ -16,14 +16,19 @@ import { useParking } from '@/context/ParkingContext';
 export function FacultyComparisonChart() {
   const { areas } = useParking();
 
-  const chartData = areas.map((area) => ({
-    name: area.facultyName.replace('Fakultas ', ''),
-    fullName: area.facultyName,
-    available: area.availableSlots,
-    occupied: area.occupiedSlots,
-    total: area.totalCapacity,
-    source: area.dataSource,
-  }));
+  const chartData = areas.map((area) => {
+    const total = area.slots.length;
+    const occupied = area.slots.filter((s) => s.status === 'OCCUPIED').length;
+    const available = area.slots.filter((s) => s.status === 'AVAILABLE').length;
+
+    return {
+      name: area.facultyName.replace('Fakultas ', ''),
+      fullName: area.facultyName,
+      available,
+      occupied,
+      total,
+    };
+  });
 
   return (
     <div className="bg-white rounded-xl border border-slate-200/90 p-5 shadow-xs flex flex-col justify-between">
@@ -116,7 +121,7 @@ export function FacultyComparisonChart() {
       <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
         <span className="inline-flex items-center gap-1.5">
           <span className="w-2 h-2 rounded-full bg-blue-600" />
-          Fasilkom terkoneksi langsung ke modul ESP32 4-Sensor
+          FILKOM terkoneksi langsung ke modul ESP32 (2 Sensor Asli)
         </span>
       </div>
     </div>

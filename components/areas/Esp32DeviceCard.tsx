@@ -32,7 +32,7 @@ export function Esp32DeviceCard({ device, isRealDevice }: Esp32DeviceCardProps) 
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h3 className="text-sm font-bold text-slate-900">{device.name}</h3>
+              <h3 className="text-sm font-bold text-slate-900 font-mono">{device.id}</h3>
               <span
                 className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
                   isRealDevice
@@ -44,7 +44,7 @@ export function Esp32DeviceCard({ device, isRealDevice }: Esp32DeviceCardProps) 
               </span>
             </div>
             <p className="text-xs text-slate-500 font-mono mt-0.5">
-              ID: {device.id} • Model: {device.model}
+              Model: {device.model}
             </p>
           </div>
         </div>
