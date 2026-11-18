@@ -16,9 +16,6 @@ import {
   Cpu,
   Car,
   RefreshCw,
-  Play,
-  Pause,
-  Shuffle,
   RotateCcw,
   SlidersHorizontal,
   History,
@@ -34,6 +31,7 @@ function AdminContent() {
   const {
     areas,
     stats,
+    lastSimEventMessage,
     toggleSlot,
     toggleGate,
     updateGateNotes,
@@ -82,11 +80,18 @@ function AdminContent() {
               Pusat Kendali 4 Area Parkir & Perangkat IoT
             </h1>
             <p className="text-xs text-blue-200 max-w-2xl">
-              Kendalikan status 2 sensor fisik FILKOM & slot simulasi fakultas lain, operasikan gerbang barrier gate, jalankan simulasi pergerakan kendaraan, dan pantau ESP32.
+              Kendalikan status 2 sensor fisik FILKOM & slot fakultas lain, operasikan gerbang barrier gate, dan pantau telemetri ESP32 secara realtime.
             </p>
           </div>
         </div>
 
+        {lastSimEventMessage && (
+          <div className="pt-2 border-t border-blue-800/60 flex items-center gap-2 text-xs text-blue-200 font-mono">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            <span className="font-semibold text-white">Status Operasional:</span>
+            <span>{lastSimEventMessage}</span>
+          </div>
+        )}
       </div>
 
       {/* Admin Tab Switcher */}
