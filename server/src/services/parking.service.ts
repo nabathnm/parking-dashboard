@@ -2,9 +2,21 @@ import { SlotPayload, GateStatusPayload, SlotStatus, GateStatus } from '../types
 import { databaseService } from './database.service.js';
 import { realtimeService } from './realtime.service.js';
 
+type MqttSlotPublisher = (
+  areaId: string,
+  slotId: string,
+  payload: { status: string; distance_cm?: number; timestamp?: string }
+) => boolean;
+
 class ParkingService {
   private simulationActive: boolean = false;
   private simInterval: NodeJS.Timeout | null = null;
+  private mqttPublisher: MqttSlotPublisher | null = null;
+
+  public registerMqttPublisher(publisher: MqttSlotPublisher) {
+    this.mqttPublisher = publisher;
+    console.log('[ParkingService] MQTT Publisher registered. Simulation will transmit via EMQX Cloud!');
+  }
 
   public async handleSlotUpdate(areaId: string, payload: SlotPayload) {
     const timestampStr = payload.timestamp || new Date().toISOString();
@@ -76,15 +88,31 @@ class ParkingService {
     const prefix = chosenArea === 'teknik-main' ? 'B' : (chosenArea === 'feb-main' ? 'C' : 'D');
     const slotNum = `${prefix}${Math.floor(1 + Math.random() * 10)}`;
     const newStatus: SlotStatus = Math.random() > 0.5 ? 'OCCUPIED' : 'AVAILABLE';
+    const timestamp = new Date().toISOString();
+    const distance_cm = newStatus === 'OCCUPIED' ? Math.round(15 + Math.random() * 30) : 180;
 
-    await this.handleSlotUpdate(chosenArea, {
-      slot_id: slotNum,
-      status: newStatus,
-      distance_cm: newStatus === 'OCCUPIED' ? Math.round(15 + Math.random() * 30) : 180,
-      timestamp: new Date().toISOString(),
-    });
+    let publishedToMqtt = false;
+    if (this.mqttPublisher) {
+      publishedToMqtt = this.mqttPublisher(chosenArea, slotNum, {
+        status: newStatus,
+        distance_cm,
+        timestamp,
+      });
+    }
 
-    return `Simulasi: Slot ${slotNum} di ${chosenArea} berubah menjadi ${newStatus}`;
+    // Jika MQTT sedang tidak terhubung atau belum siap, proses langsung ke database
+    if (!publishedToMqtt) {
+      await this.handleSlotUpdate(chosenArea, {
+        slot_id: slotNum,
+        status: newStatus,
+        distance_cm,
+        timestamp,
+      });
+    }
+
+    return `Simulasi: Slot ${slotNum} di ${chosenArea} berubah menjadi ${newStatus}${
+      publishedToMqtt ? ' (Terkirim ke EMQX Cloud)' : ''
+    }`;
   }
 }
 

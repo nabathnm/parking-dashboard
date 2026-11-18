@@ -2,6 +2,16 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { env, isSupabaseConfigured } from '../config/env.js';
 import { SlotStatus, GateStatus, DeviceStatus } from '../types/index.js';
 
+export function normalizeAreaId(id: string): string {
+  if (!id) return id;
+  const clean = id.trim().toLowerCase();
+  if (clean === 'filkom' || clean === 'filkom-main') return 'filkom-main';
+  if (clean === 'teknik' || clean === 'teknik-main') return 'teknik-main';
+  if (clean === 'feb' || clean === 'feb-main') return 'feb-main';
+  if (clean === 'fisip' || clean === 'fisip-main') return 'fisip-main';
+  return clean.endsWith('-main') ? clean : `${clean}-main`;
+}
+
 class DatabaseService {
   private client: SupabaseClient | null = null;
   private isConnected: boolean = false;
@@ -131,17 +141,18 @@ class DatabaseService {
     distanceCm?: number
   ) {
     if (!this.client) return null;
+    const targetAreaId = normalizeAreaId(areaId);
     try {
       // Find the slot first
       const { data: slots, error: findError } = await this.client
         .from('parking_slots')
         .select('*')
-        .eq('area_id', areaId)
+        .eq('area_id', targetAreaId)
         .or(`id.eq.${slotNumberOrId},slot_number.eq.${slotNumberOrId}`)
         .limit(1);
 
       if (findError || !slots || slots.length === 0) {
-        console.warn(`[DatabaseService] Slot ${slotNumberOrId} not found in area ${areaId}`);
+        console.warn(`[DatabaseService] Slot ${slotNumberOrId} not found in area ${targetAreaId}`);
         return null;
       }
 
@@ -168,17 +179,17 @@ class DatabaseService {
       if (updateError) throw updateError;
 
       // Recalculate area status
-      await this.recalculateAreaStatus(areaId);
+      await this.recalculateAreaStatus(targetAreaId);
 
       // Record activity if status changed
       if (prevStatus !== status) {
         const isOccupied = status === 'OCCUPIED';
         const activity = isOccupied ? 'IN' : 'OUT';
-        const isReal = areaId === 'filkom-main';
+        const isReal = targetAreaId === 'filkom-main';
 
         await this.recordActivity({
-          area_id: areaId,
-          faculty: areaId === 'filkom-main' ? 'Fakultas Ilmu Komputer' : areaId,
+          area_id: targetAreaId,
+          faculty: targetAreaId === 'filkom-main' ? 'Fakultas Ilmu Komputer' : targetAreaId,
           slot_id: currentSlot.slot_number,
           activity,
           status,
@@ -198,17 +209,18 @@ class DatabaseService {
 
   public async markSlotsAsUnknown(areaId: string) {
     if (!this.client) return;
+    const targetAreaId = normalizeAreaId(areaId);
     try {
-      console.log(`[DatabaseService] Marking all slots in ${areaId} as UNKNOWN (Device Offline)`);
+      console.log(`[DatabaseService] Marking all slots in ${targetAreaId} as UNKNOWN (Device Offline)`);
       await this.client
         .from('parking_slots')
         .update({ status: 'UNKNOWN', last_changed: new Date().toISOString() })
-        .eq('area_id', areaId);
+        .eq('area_id', targetAreaId);
 
       await this.client
         .from('parking_areas')
         .update({ status: 'OFFLINE', last_updated: new Date().toISOString() })
-        .eq('id', areaId);
+        .eq('id', targetAreaId);
     } catch (err: any) {
       console.error('[DatabaseService] markSlotsAsUnknown error:', err.message);
     }
@@ -221,6 +233,7 @@ class DatabaseService {
     telemetry?: { rssi?: number; uptime_seconds?: number; ip_address?: string; mac_address?: string }
   ) {
     if (!this.client) return null;
+    const targetAreaId = normalizeAreaId(areaId);
     try {
       const updateData: Record<string, any> = {
         status,
@@ -235,7 +248,7 @@ class DatabaseService {
       const { data, error } = await this.client
         .from('iot_devices')
         .update(updateData)
-        .or(`id.eq.${deviceId},area_id.eq.${areaId}`)
+        .or(`id.eq.${deviceId},area_id.eq.${targetAreaId}`)
         .select();
 
       if (error) throw error;
@@ -253,6 +266,7 @@ class DatabaseService {
     servoAngle?: number
   ) {
     if (!this.client) return null;
+    const targetAreaId = normalizeAreaId(areaId);
     try {
       const angle = servoAngle !== undefined ? servoAngle : (status === 'OPEN' ? 90 : 0);
       const { data, error } = await this.client
@@ -263,7 +277,7 @@ class DatabaseService {
           last_toggled: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         })
-        .or(`id.eq.${gateId},area_id.eq.${areaId}`)
+        .or(`id.eq.${gateId},area_id.eq.${targetAreaId}`)
         .select()
         .single();
 
@@ -271,14 +285,14 @@ class DatabaseService {
 
       // Log gate activity
       await this.recordActivity({
-        area_id: areaId,
-        faculty: areaId === 'filkom-main' ? 'Fakultas Ilmu Komputer' : areaId,
+        area_id: targetAreaId,
+        faculty: targetAreaId === 'filkom-main' ? 'Fakultas Ilmu Komputer' : targetAreaId,
         slot_id: 'GATE',
         activity: 'GATE_TRIGGER',
         status: status === 'OPEN' ? 'AVAILABLE' : 'OCCUPIED',
         previous_status: status === 'OPEN' ? 'OCCUPIED' : 'AVAILABLE',
         current_status: status === 'OPEN' ? 'AVAILABLE' : 'OCCUPIED',
-        data_source: areaId === 'filkom-main' ? 'REAL' : 'SIMULATED',
+        data_source: targetAreaId === 'filkom-main' ? 'REAL' : 'SIMULATED',
       });
 
       return data;

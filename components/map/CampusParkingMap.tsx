@@ -214,16 +214,6 @@ export function CampusParkingMap({
 
           
 
-                {/* Active Selection Glow Accent */}
-                {isSelected && (
-                  <div className="mt-2 pt-1.5 border-t border-blue-500/30 flex items-center justify-between text-[10px] text-blue-300 font-medium">
-                    <span className="flex items-center gap-1">
-                      <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-ping" />
-                      Aktif di Inspektur
-                    </span>
-                    <span>Klik detail &rarr;</span>
-                  </div>
-                )}
               </div>
             );
           })}

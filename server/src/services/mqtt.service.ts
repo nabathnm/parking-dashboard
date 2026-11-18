@@ -15,6 +15,11 @@ class MqttService {
   private connectionStatus: 'CONNECTED' | 'DISCONNECTED' | 'CONNECTING' | 'CONFIG_REQUIRED' = 'DISCONNECTED';
 
   constructor() {
+    // Daftarkan MQTT publisher ke parkingService agar simulasi terkirim ke EMQX
+    parkingService.registerMqttPublisher((areaId, slotId, payload) => {
+      return this.publishSlotStatus(areaId, slotId, payload);
+    });
+
     this.connect();
   }
 
@@ -192,7 +197,8 @@ class MqttService {
       return false;
     }
 
-    const topic = `campus/parking/${areaId}/gate/${gateId}/command`;
+    const shortArea = areaId.replace('-main', '');
+    const topic = `campus/parking/${shortArea}/gate/${gateId}/command`;
     const payloadStr = JSON.stringify({
       ...command,
       timestamp: command.timestamp || new Date().toISOString(),
@@ -203,6 +209,64 @@ class MqttService {
     this.client.publish(topic, payloadStr, { qos: 1 }, (err) => {
       if (err) {
         console.error(`[MqttService] Failed to publish gate command:`, err.message);
+      }
+    });
+
+    return true;
+  }
+
+  // Publikasi status slot ke EMQX Cloud (dipakai oleh simulator area Teknik, FEB, FISIP)
+  public publishSlotStatus(
+    areaId: string,
+    slotId: string,
+    payload: { status: string; distance_cm?: number; timestamp?: string }
+  ): boolean {
+    if (!this.client || this.connectionStatus !== 'CONNECTED') {
+      return false;
+    }
+
+    const shortArea = areaId.replace('-main', '');
+    const topic = `campus/parking/${shortArea}/slots/${slotId}`;
+    const payloadStr = JSON.stringify({
+      slot_id: slotId,
+      status: payload.status,
+      distance_cm: payload.distance_cm,
+      timestamp: payload.timestamp || new Date().toISOString(),
+    });
+
+    this.client.publish(topic, payloadStr, { qos: 1 }, (err) => {
+      if (err) {
+        console.error(`[MqttService] Failed to publish slot status to ${topic}:`, err.message);
+      } else {
+        console.log(`[MqttService] [EMQX Cloud] Published simulation slot -> ${topic}: ${payload.status}`);
+      }
+    });
+
+    return true;
+  }
+
+  // Publikasi heartbeat node ke EMQX Cloud
+  public publishNodeStatus(
+    areaId: string,
+    payload: { device_id: string; status: 'ONLINE' | 'OFFLINE'; rssi?: number; uptime_seconds?: number }
+  ): boolean {
+    if (!this.client || this.connectionStatus !== 'CONNECTED') {
+      return false;
+    }
+
+    const shortArea = areaId.replace('-main', '');
+    const topic = `campus/parking/${shortArea}/node/status`;
+    const payloadStr = JSON.stringify({
+      device_id: payload.device_id,
+      status: payload.status,
+      rssi: payload.rssi ?? -60,
+      uptime_seconds: payload.uptime_seconds ?? Math.floor(process.uptime()),
+      timestamp: new Date().toISOString(),
+    });
+
+    this.client.publish(topic, payloadStr, { qos: 1 }, (err) => {
+      if (err) {
+        console.error(`[MqttService] Failed to publish node status to ${topic}:`, err.message);
       }
     });
 
